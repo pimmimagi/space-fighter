@@ -1,6 +1,6 @@
 import math
 from random import randint, random
-
+from abc import ABC, abstractmethod
 import tkinter as tk
 
 from gamelib import Sprite, GameApp, Text
@@ -33,6 +33,8 @@ class SpaceGame(GameApp):
         self.enemies = []
         self.bullets = []
 
+        self.enemy_creation_strategies = [(0.2, StarEnemyGenerationStrategy()), (1.0, EdgeEnemyGenerationStrategy())]
+
     def add_enemy(self, enemy):
         self.enemies.append(enemy)
 
@@ -47,9 +49,9 @@ class SpaceGame(GameApp):
             self.bomb_power = 0
 
             self.bomb_canvas_id = self.canvas.create_oval(
-                self.ship.x - BOMB_RADIUS, 
+                self.ship.x - BOMB_RADIUS,
                 self.ship.y - BOMB_RADIUS,
-                self.ship.x + BOMB_RADIUS, 
+                self.ship.x + BOMB_RADIUS,
                 self.ship.y + BOMB_RADIUS
             )
 
@@ -112,11 +114,11 @@ class SpaceGame(GameApp):
         return [enemy]
 
     def create_enemies(self):
-        if random() < 0.2:
-            enemies = self.create_enemy_star()
-        else:
-            enemies = self.create_enemy_from_edges()
-
+        p = random()
+        for prob, strategy in self.enemy_creation_strategies:
+            if p < prob:
+                enemies = strategy.generate(self, self.ship)
+                break
         for e in enemies:
             self.add_enemy(e)
 
@@ -177,10 +179,47 @@ class SpaceGame(GameApp):
             self.ship.stop_turn('RIGHT')
 
 
+class EnemyGenerationStrategy(ABC):
+    @abstractmethod
+    def generate(self, space_game, ship):
+        pass
+
+
+class StarEnemyGenerationStrategy(EnemyGenerationStrategy):
+    def generate(self, space_game, ship):
+        enemies = []
+
+        x = randint(100, CANVAS_WIDTH - 100)
+        y = randint(100, CANVAS_HEIGHT - 100)
+
+        while vector_len(x - ship.x, y - ship.y) < 200:
+            x = randint(100, CANVAS_WIDTH - 100)
+            y = randint(100, CANVAS_HEIGHT - 100)
+
+        for d in range(18):
+            dx, dy = direction_to_dxdy(d * 20)
+            enemy = Enemy(space_game, x, y, dx * ENEMY_BASE_SPEED, dy * ENEMY_BASE_SPEED)
+            enemies.append(enemy)
+
+        return enemies
+
+
+class EdgeEnemyGenerationStrategy(EnemyGenerationStrategy):
+    def generate(self, space_game, ship):
+        x, y = random_edge_position()
+        vx, vy = normalize_vector(ship.x - x, ship.y - y)
+
+        vx *= ENEMY_BASE_SPEED
+        vy *= ENEMY_BASE_SPEED
+
+        enemy = Enemy(space_game, x, y, vx, vy)
+        return [enemy]
+
+
 if __name__ == "__main__":
     root = tk.Tk()
     root.title("Space Fighter")
- 
+
     # do not allow window resizing
     root.resizable(False, False)
     app = SpaceGame(root, CANVAS_WIDTH, CANVAS_HEIGHT, UPDATE_DELAY)
